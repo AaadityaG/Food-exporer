@@ -1,101 +1,190 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import { useEffect, useState } from 'react';
+
+const Home = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [sortCriteria, setSortCriteria] = useState('');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [page, setPage] = useState(1); // Pagination state
+  const [totalPages, setTotalPages] = useState(1); // Total pages
+
+  // Fetching categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('https://world.openfoodfacts.org/categories.json');
+        const data = await response.json();
+        setCategories(data.tags || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Fetching products based on search term, selected category, and pagination
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      let url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${searchTerm}&json=true&page=${page}`;
+
+      if (selectedCategory) {
+        url = `https://world.openfoodfacts.org/category/${selectedCategory}.json?page=${page}`;
+      }
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        setProducts(data.products || []);
+        setTotalPages(Math.ceil((data.count || 0) / 20)); // Assuming 20 products per page
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [searchTerm, selectedCategory, page]);
+
+  // Sorting function
+  const handleSort = (criteria) => {
+    if (sortCriteria === criteria) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCriteria(criteria);
+      setSortOrder('asc');
+    }
+  };
+
+  // Sorting logic based on selected criteria
+  const sortedProducts = [...products].sort((a, b) => {
+    if (!sortCriteria) return 0;
+
+    let comparison = 0;
+    if (sortCriteria === 'product_name') {
+      comparison = a.product_name?.localeCompare(b.product_name || '');
+    } else if (sortCriteria === 'nutrition_grade') {
+      comparison = (a.nutrition_grades || '').localeCompare(b.nutrition_grades || '');
+    }
+
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  // Pagination handler
+  const handleNextPage = () => {
+    if (page < totalPages) {
+      setPage(page + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (page > 1) {
+      setPage(page - 1);
+    }
+  };
+
+  // if (loading) {
+  //   return <div>Loading...</div>;
+  // }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Food Product Explorer</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+      {/* Search Bar */}
+      <input
+        type="text"
+        placeholder="Search for products..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="border rounded-md p-2 mb-4"
+      />
+
+      {/* Category Filter */}
+      <div className="mb-4">
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="border rounded-md p-2"
+        >
+          <option value="">All Categories</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Sorting Options */}
+      <div className="flex justify-between items-center mb-4">
+        <button
+          onClick={() => handleSort('product_name')}
+          className={`mr-2 p-2 border rounded ${
+            sortCriteria === 'product_name' ? 'bg-gray-200' : ''
+          }`}
+        >
+          Sort by Name {sortCriteria === 'product_name' && (sortOrder === 'asc' ? '↑' : '↓')}
+        </button>
+        <button
+          onClick={() => handleSort('nutrition_grade')}
+          className={`p-2 border rounded ${
+            sortCriteria === 'nutrition_grade' ? 'bg-gray-200' : ''
+          }`}
+        >
+          Sort by Nutrition Grade {sortCriteria === 'nutrition_grade' && (sortOrder === 'asc' ? '↑' : '↓')}
+        </button>
+      </div>
+
+          {loading ? 'Loading...' : 
+          <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {sortedProducts.map((product) => (
+          <div key={product.code} className="border rounded-lg p-4 shadow-md">
+            <h2 className="text-xl font-bold mb-2">{product.product_name}</h2>
+            <img
+              src={product.image_url || 'https://via.placeholder.com/200'}
+              alt={product.product_name}
+              className="rounded-lg mb-4"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+            <p>Category: {product.categories || 'N/A'}</p>
+            <p>Nutrition Grade: {product.nutrition_grades || 'N/A'}</p>
+            <p>Ingredients: {product.ingredients_text || 'N/A'}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-center items-center mt-6 space-x-4">
+        <button
+          onClick={handlePreviousPage}
+          disabled={page === 1}
+          className="p-2 bg-blue-500 text-white rounded disabled:opacity-50"
         >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          Previous
+        </button>
+        <span className="text-lg">{`Page ${page} of ${totalPages}`}</span>
+        <button
+          onClick={handleNextPage}
+          disabled={page === totalPages}
+          className="p-2 bg-blue-500 text-white rounded disabled:opacity-50"
         >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          Next
+        </button>
+      </div>
+
+      </>
+
+          }
+
     </div>
   );
-}
+};
+
+export default Home;
